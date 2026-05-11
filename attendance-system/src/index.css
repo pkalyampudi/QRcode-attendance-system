@@ -1,0 +1,11 @@
+/* src/index.css */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #f0f4ff; color: #1a1a2e; -webkit-font-smoothing: antialiased; }
+input, button, select, textarea { font-family: inherit; }
+button { cursor: pointer; }
+a { color: inherit; text-decoration: none; }
+@media (max-width: 640px) {
+  /* Responsive sidebar collapses on mobile */
+  aside { display: none !important; }
+}
