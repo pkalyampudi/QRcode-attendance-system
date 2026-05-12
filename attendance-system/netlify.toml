@@ -1,7 +1,7 @@
 [build]
   base    = "attendance-system"
   command = "npm run build"
-  publish = "attendance-system/dist"
+  publish = "dist"
 
 [[redirects]]
   from = "/*"
