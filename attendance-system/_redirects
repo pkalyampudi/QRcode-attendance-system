@@ -1,0 +1,3 @@
+/scan/*  /index.html  200
+/scan    /index.html  200
+/*       /index.html  200
