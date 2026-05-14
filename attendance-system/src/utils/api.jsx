@@ -1,5 +1,5 @@
 // src/utils/api.js
-// Replace with your deployed Apps Script Web App URL after Step 4
+// Replace with your deployed Apps Script Web App URL after Step 4 ---
 
 const API_URL = import.meta.env.VITE_API_URL || "YOUR_APPS_SCRIPT_WEB_APP_URL";
 
