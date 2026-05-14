@@ -6,7 +6,7 @@ const API_URL = import.meta.env.VITE_API_URL || "YOUR_APPS_SCRIPT_WEB_APP_URL";
 async function call(action, payload = {}) {
   const res = await fetch(API_URL, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "text/plain" },
     body: JSON.stringify({ action, ...payload }),
   });
   const data = await res.json();
