@@ -202,4 +202,4 @@ Problem: Email not received
   In Apps Script → Services → check GmailApp is enabled.
 
 Problem: "Session already submitted"
-  Fix: Normal — means Submit was clicked twice. Data is saved correctly.
+  Fix: Normal — means Submit was clicked twice. Data is saved correctly...
