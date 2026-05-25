@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import { api } from "../utils/api.jsx";
 import { useAuth } from "../hooks/useAuth.jsx";
 
-const LAB_BATCHES    = ["A","B","C","D","E","F","G"];
+const LAB_BATCHES    = ["A","B","C"];
 const JOINING_BATCHES = ["2024-25","2025-26","2026-27"];
 const COLORS = ["#ea4335","#6DBE45","#1a73e8","#f59e0b","#7c3aed","#06b6d4","#ec4899"];
 
