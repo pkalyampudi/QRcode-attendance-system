@@ -12,7 +12,7 @@ const SUBJECTS = [
   { code:"PATH", name:"Pathology" },
   { code:"MICR", name:"Microbiology" },
 ];
-const LAB_BATCHES = ["A","B","C","D","E","F","G"];
+const LAB_BATCHES = ["A","B","C"];
 const SESSION_SECS = 900;
 
 export default function SessionPage() {
