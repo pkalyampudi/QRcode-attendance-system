@@ -4,8 +4,7 @@ import QRCode from "qrcode";
 import { api } from "../utils/api.jsx";
 import { useAuth } from "../hooks/useAuth.jsx";
 
-// Filter subjects based on professor's assigned subject
-const ALL_SUBJECTS = [
+const SUBJECTS = [
   { code:"ANAT", name:"Anatomy" },
   { code:"PHYS", name:"Physiology" },
   { code:"BIOC", name:"Biochemistry" },
@@ -13,12 +12,6 @@ const ALL_SUBJECTS = [
   { code:"PATH", name:"Pathology" },
   { code:"MICR", name:"Microbiology" },
 ];
-
-// Inside the component, add this line:
-const visibleSubjects = user.subjectCode === "ALL"
-  ? ALL_SUBJECTS
-  : ALL_SUBJECTS.filter(s => s.code === user.subjectCode);
-
 const LAB_BATCHES = ["A","B","C","D","E","F","G"];
 const SESSION_SECS = 900;
 
@@ -38,11 +31,7 @@ export default function SessionPage() {
   const timerRef = useRef(null);
   const pollRef  = useRef(null);
 
-  const visibleSubjects = user.subjectCode && user.subjectCode !== "ALL"
-  ? ALL_SUBJECTS.filter(s => s.code === user.subjectCode)
-  : ALL_SUBJECTS;
-
-  const subjectName = ALL_SUBJECTS.find(s => s.code === subject)?.name || subject;
+  const subjectName = SUBJECTS.find(s => s.code === subject)?.name || subject;
 
   const startTimer = useCallback((expISO) => {
     clearInterval(timerRef.current);
@@ -118,7 +107,7 @@ export default function SessionPage() {
               <div style={S.field}>
                 <label style={S.label}>Subject</label>
                 <div style={S.subjectGrid}>
-                  {visibleSubjects.map(sub => (
+                  {SUBJECTS.map(sub => (
                     <button key={sub.code} onClick={() => setSubject(sub.code)}
                       style={{ ...S.subjectBtn, ...(subject === sub.code ? S.subjectBtnActive : {}) }}>
                       {sub.name}
