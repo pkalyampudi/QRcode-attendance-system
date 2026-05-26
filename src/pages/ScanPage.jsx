@@ -58,14 +58,8 @@ export default function ScanPage() {
       }
     } catch(e) {
       clearTimeout(optimisticTimer);
-      // If already showing success optimistically, keep it and retry in background
-      if (status === "success") {
-        setSynced(false);
-        retryInBackground(token, rollNo.trim(), deviceId);
-      } else {
-        setStatus("error");
-        setMessage("Network error — please try again");
-      }
+      // Always retry in background — student already sees success screen
+      retryInBackground(token, rollNo.trim(), deviceId);
     }
   };
 
