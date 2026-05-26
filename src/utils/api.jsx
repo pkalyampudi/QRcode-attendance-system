@@ -1,17 +1,32 @@
 // src/utils/api.jsx
 const API_URL = import.meta.env.VITE_API_URL || "YOUR_APPS_SCRIPT_URL";
 
-async function call(action, payload = {}) {
-  const res = await fetch(API_URL, {
-    method: "POST",
-    headers: { "Content-Type": "text/plain" },
-    body: JSON.stringify({ action, ...payload }),
-  });
-  const data = await res.json();
-  if (!data.ok) throw new Error(data.error || "API error");
-  return data;
+async function call(action, payload = {}, retries = 3) {
+  let lastError;
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeout    = setTimeout(() => controller.abort(), 10000); // 10s timeout
+      const res = await fetch(API_URL, {
+        method:  "POST",
+        headers: { "Content-Type": "text/plain" },
+        body:    JSON.stringify({ action, ...payload }),
+        signal:  controller.signal,
+      });
+      clearTimeout(timeout);
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || "API error");
+      return data;
+    } catch(e) {
+      lastError = e;
+      if (attempt < retries) {
+        // Wait longer between each retry: 1s, 2s, 4s
+        await new Promise(r => setTimeout(r, Math.pow(2, attempt - 1) * 1000));
+      }
+    }
+  }
+  throw lastError;
 }
-
 export const api = {
   login:            (id, pin)                => call("login",            { id, pin }),
   registerProfessor:(prof)                   => call("registerProfessor", prof),
