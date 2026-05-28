@@ -1,17 +1,34 @@
 // src/pages/ScanPage.jsx
 // Shows student name confirmation before marking present
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { api, getDeviceId } from "../utils/api.jsx";
 
 export default function ScanPage() {
   const params  = new URLSearchParams(window.location.search);
   const token   = params.get("token") || "";
 
-  const [rollNo,    setRollNo]    = useState("");
-  const [status,    setStatus]    = useState("idle");      // idle | confirming | marking | success | error | duplicate
+  const [rollNo,      setRollNo]      = useState("");
+  const [status,      setStatus]      = useState("idle");
   const [studentName, setStudentName] = useState("");
-  const [message,   setMessage]   = useState("");
-  const [synced,    setSynced]    = useState(false);
+  const [message,     setMessage]     = useState("");
+  const [synced,      setSynced]      = useState(false);
+  const [warming,     setWarming]     = useState(true); // warm up Apps Script on page load
+
+  // Ping Apps Script the moment page loads to wake it up
+  // So by the time student types roll number, it's ready
+  useEffect(() => {
+    const warmup = async () => {
+      try {
+        await fetch(import.meta.env.VITE_API_URL || "", {
+          method: "POST",
+          headers: { "Content-Type": "text/plain" },
+          body: JSON.stringify({ action: "getSubjects" }),
+        });
+      } catch(_) {}
+      setWarming(false);
+    };
+    warmup();
+  }, []);
 
   // Step 1 — look up student name first (instant from token cache)
   const lookupName = async (e) => {
@@ -83,8 +100,17 @@ export default function ScanPage() {
           <div style={S.headerSub}>Attendance · Medical College</div>
         </div>
 
+        {/* ── WARMING UP ── */}
+        {status === "idle" && warming && (
+          <div style={S.centerWrap}>
+            <div style={S.spinner}/>
+            <p style={S.loadingText}>Connecting to server…</p>
+            <p style={S.loadingSubText}>Please wait a moment</p>
+          </div>
+        )}
+
         {/* ── IDLE — enter roll number ── */}
-        {status === "idle" && (
+        {status === "idle" && !warming && (
           <div style={S.formWrap}>
             <div style={S.stepsBox}>
               <div style={S.stepsTitle}>Quick steps</div>
