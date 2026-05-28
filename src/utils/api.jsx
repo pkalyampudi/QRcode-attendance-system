@@ -1,21 +1,28 @@
 // src/utils/api.jsx
-const API_URL = import.meta.env.VITE_API_URL || "YOUR_APPS_SCRIPT_URL";
+const API_URL = import.meta.env.VITE_API_URL || "";
 
-// Keep Apps Script warm — ping every 4 mins to prevent cold starts
+// Keep Apps Script warm
 let warmupInterval = null;
-function startWarmup() {
+export function startWarmup() {
   if (warmupInterval) return;
-  warmupInterval = setInterval(() => {
-    fetch(API_URL, {
-      method:  "POST",
-      headers: { "Content-Type": "text/plain" },
-      body:    JSON.stringify({ action: "getSubjects" }),
-    }).catch(() => {});
-  }, 4 * 60 * 1000); // every 4 minutes
+  // Immediate warmup ping
+  pingServer();
+  // Then every 4 minutes
+  warmupInterval = setInterval(pingServer, 4 * 60 * 1000);
 }
 
-async function call(action, payload = {}, retries = 3, timeoutMs = 20000) {
+function pingServer() {
+  fetch(API_URL, {
+    method: "POST",
+    mode: "no-cors", // bypass CORS for warmup ping
+    headers: { "Content-Type": "text/plain" },
+    body: JSON.stringify({ action: "getSubjects" }),
+  }).catch(() => {});
+}
+
+async function call(action, payload = {}, retries = 3, timeoutMs = 25000) {
   let lastError;
+
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
       const controller = new AbortController();
@@ -23,27 +30,41 @@ async function call(action, payload = {}, retries = 3, timeoutMs = 20000) {
 
       const res = await fetch(API_URL, {
         method:  "POST",
+        mode:    "cors",
         headers: { "Content-Type": "text/plain" },
         body:    JSON.stringify({ action, ...payload }),
         signal:  controller.signal,
       });
+
       clearTimeout(timer);
 
+      if (!res.ok) throw new Error("Server error: " + res.status);
+
       const text = await res.text();
+      if (!text || text.trim() === "") throw new Error("Empty response from server");
+
       let data;
       try { data = JSON.parse(text); }
-      catch(e) { throw new Error("Server returned invalid response. Please try again."); }
+      catch(e) {
+        // Apps Script sometimes returns HTML error page
+        if (text.includes("Error")) throw new Error("Server error — please try again");
+        throw new Error("Invalid response from server");
+      }
 
-      if (!data.ok) throw new Error(data.error || "API error");
+      if (!data.ok) throw new Error(data.error || "Request failed");
       return data;
 
     } catch(e) {
-      lastError = e.name === "AbortError"
-        ? new Error("Taking too long — please try again.")
-        : e;
+      if (e.name === "AbortError") {
+        lastError = new Error(attempt < retries
+          ? "Slow connection, retrying…"
+          : "Connection timed out. Please check your internet and try again."
+        );
+      } else {
+        lastError = e;
+      }
 
       if (attempt < retries) {
-        // Wait: 2s, 4s, 6s between retries
         await new Promise(r => setTimeout(r, attempt * 2000));
       }
     }
@@ -52,24 +73,21 @@ async function call(action, payload = {}, retries = 3, timeoutMs = 20000) {
 }
 
 export const api = {
-  login:            (id, pin)            => { startWarmup(); return call("login", { id, pin }, 3, 25000); },
-  registerProfessor:(prof)               => call("registerProfessor", prof, 2, 20000),
-  getSubjects:      ()                   => call("getSubjects", {}, 2, 15000),
-  createSession:    (userId, pin, opts)  => call("createSession", { userId, pin, ...opts }, 3, 20000),
-  getActiveSession: (userId, pin)        => call("getActiveSession", { userId, pin }, 2, 15000),
-  submitSession:    (userId, pin, sid)   => call("submitSession", { userId, pin, sessionId: sid }, 3, 30000),
-
-  // recordScan — fastest possible, 5 retries, 15s timeout
-  recordScan: (token, studentId, deviceId) =>
-    call("recordScan", { token, studentId, deviceId }, 5, 15000),
-
-  getStudents:      (userId, pin, role)  => call("getStudents",    { userId, pin, role }, 2, 20000),
-  addStudent:       (userId, pin, s)     => call("addStudent",     { userId, pin, ...s }, 2, 20000),
-  removeStudent:    (userId, pin, sid)   => call("removeStudent",  { userId, pin, studentId: sid }, 2, 20000),
-  importStudents:   (userId, pin, stus)  => call("importStudents", { userId, pin, students: stus }, 2, 30000),
-  getAttendance:    (userId, pin)        => call("getAttendance",  { userId, pin }, 2, 25000),
-  getHODDashboard:  (userId, pin)        => call("getHODDashboard", { userId, pin }, 2, 25000),
-  getStudentReport: (userId, pin, sid)   => call("getStudentReport", { userId, pin, studentId: sid }, 2, 20000),
+  login:            (id, pin)           => { startWarmup(); return call("login", { id, pin }, 3, 30000); },
+  registerProfessor:(prof)              => call("registerProfessor", prof, 2),
+  getSubjects:      ()                  => call("getSubjects", {}, 2, 15000),
+  createSession:    (userId, pin, opts) => call("createSession", { userId, pin, ...opts }, 3, 25000),
+  getActiveSession: (userId, pin)       => call("getActiveSession", { userId, pin }, 2),
+  submitSession:    (userId, pin, sid)  => call("submitSession", { userId, pin, sessionId: sid }, 3, 35000),
+  recordScan:       (token, studentId, deviceId) =>
+    call("recordScan", { token, studentId, deviceId }, 5, 20000),
+  getStudents:      (userId, pin, role) => call("getStudents", { userId, pin, role }, 2),
+  addStudent:       (userId, pin, s)    => call("addStudent",  { userId, pin, ...s }, 2),
+  removeStudent:    (userId, pin, sid)  => call("removeStudent", { userId, pin, studentId: sid }, 2),
+  importStudents:   (userId, pin, stus) => call("importStudents", { userId, pin, students: stus }, 2, 35000),
+  getAttendance:    (userId, pin)       => call("getAttendance", { userId, pin }, 2, 25000),
+  getHODDashboard:  (userId, pin)       => call("getHODDashboard", { userId, pin }, 2, 25000),
+  getStudentReport: (userId, pin, sid)  => call("getStudentReport", { userId, pin, studentId: sid }, 2),
 };
 
 export function getDeviceId() {
