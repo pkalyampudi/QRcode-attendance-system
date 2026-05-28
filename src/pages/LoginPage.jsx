@@ -14,6 +14,7 @@ export default function LoginPage() {
         <div style={S.leftInner}>
           <Logo size="lg" dark />
           <p style={S.tagline}>Smart attendance management for medical colleges</p>
+          <div style={S.collegeBadge}>🏥 GVP College of Medicine</div>
           <div style={S.features}>
             {[
               ["📋","6 subjects × theory + lab tracked separately"],
