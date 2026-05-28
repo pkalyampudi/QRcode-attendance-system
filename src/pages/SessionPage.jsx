@@ -81,15 +81,19 @@ export default function SessionPage() {
 
   const startPolling = useCallback(() => {
     clearInterval(pollRef.current);
-    pollRef.current = setInterval(async () => {
+    const doPoll = async () => {
       try {
         const d     = await api.getAttendance(user.id, pin);
         const today = new Date().toISOString().slice(0,10);
         const key   = subject + "|" + sessionType;
         const rec   = (d.attendance[key] || {})[today] || {};
-        setLiveCount(prev => ({ ...prev, present: Object.values(rec).filter(Boolean).length }));
+        const pres  = Object.values(rec).filter(Boolean).length;
+        const total = d.students?.length || 0;
+        setLiveCount({ present: pres, total });
       } catch(_) {}
-    }, 5000);
+    };
+    doPoll();
+    pollRef.current = setInterval(doPoll, 5000);
   }, [user.id, pin, subject, sessionType]);
 
   const generateQR = async () => {
