@@ -81,22 +81,32 @@ export default function SessionPage() {
     }, 1000);
   }, [autoSubmit]);
 
-  const startPolling = useCallback(() => {
+  const startPolling = useCallback((currentSessionType, currentLabBatch) => {
     clearInterval(pollRef.current);
     const doPoll = async () => {
       try {
         const d     = await api.getAttendance(user.id, pin);
         const today = new Date().toISOString().slice(0,10);
-        const key   = subject + "|" + sessionType;
+        const key   = subject + "|" + currentSessionType;
         const rec   = (d.attendance[key] || {})[today] || {};
         const pres  = Object.values(rec).filter(Boolean).length;
-        const total = d.students?.length || 0;
+
+        // For LAB sessions — count only students in this batch
+        // For THEORY — count all students
+        let total = 0;
+        if (d.students) {
+          if (currentSessionType === "LAB" && currentLabBatch && currentLabBatch !== "ALL") {
+            total = d.students.filter(s => s.labBatch === currentLabBatch).length;
+          } else {
+            total = d.students.length;
+          }
+        }
         setLiveCount({ present: pres, total });
       } catch(_) {}
     };
     doPoll();
     pollRef.current = setInterval(doPoll, 5000);
-  }, [user.id, pin, subject, sessionType]);
+  }, [user.id, pin, subject]);
 
   const generateQR = async () => {
     setLoading(true); setError("");
@@ -120,7 +130,7 @@ export default function SessionPage() {
       const secs = Math.round((new Date(ses.expiresAt) - Date.now()) / 1000);
       setSecsLeft(secs);
       startTimer(ses.expiresAt, secs);
-      startPolling();
+      startPolling(sessionType, sessionType === "LAB" ? labBatch : "ALL");
       setPhase("active");
     } catch(e) { setError(e.message); }
     finally { setLoading(false); }
