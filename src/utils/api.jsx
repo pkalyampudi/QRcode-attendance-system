@@ -6,7 +6,8 @@ async function call(action, payload = {}, retries = 3) {
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
       const controller = new AbortController();
-      const timeout    = setTimeout(() => controller.abort(), 10000); // 10s timeout
+      // 12 second timeout — Apps Script cold start can take 8-10s
+      const timeout = setTimeout(() => controller.abort(), 12000);
       const res = await fetch(API_URL, {
         method:  "POST",
         headers: { "Content-Type": "text/plain" },
@@ -19,14 +20,18 @@ async function call(action, payload = {}, retries = 3) {
       return data;
     } catch(e) {
       lastError = e;
+      if (e.name === "AbortError") {
+        lastError = new Error("Request timed out. Please check your connection and try again.");
+      }
       if (attempt < retries) {
-        // Wait longer between each retry: 1s, 2s, 4s
+        // Exponential backoff: 1s, 2s, 4s
         await new Promise(r => setTimeout(r, Math.pow(2, attempt - 1) * 1000));
       }
     }
   }
   throw lastError;
 }
+
 export const api = {
   login:            (id, pin)                => call("login",            { id, pin }),
   registerProfessor:(prof)                   => call("registerProfessor", prof),
@@ -34,7 +39,9 @@ export const api = {
   createSession:    (userId, pin, opts)      => call("createSession",    { userId, pin, ...opts }),
   getActiveSession: (userId, pin)            => call("getActiveSession", { userId, pin }),
   submitSession:    (userId, pin, sessionId) => call("submitSession",    { userId, pin, sessionId }),
-  recordScan: (token, studentId, deviceId)   => call("recordScan", { token, studentId, deviceId }, 5), // 5 retries for scan
+  // recordScan gets 5 retries and shorter timeout — must be fast for 200 students
+  recordScan:       (token, studentId, deviceId) =>
+    call("recordScan", { token, studentId, deviceId }, 5),
   getStudents:      (userId, pin, role)      => call("getStudents",      { userId, pin, role }),
   addStudent:       (userId, pin, s)         => call("addStudent",       { userId, pin, ...s }),
   removeStudent:    (userId, pin, studentId) => call("removeStudent",    { userId, pin, studentId }),
@@ -47,9 +54,16 @@ export const api = {
 export function getDeviceId() {
   let id = localStorage.getItem("dv_device_id");
   if (!id) {
-    const raw = [navigator.userAgent, navigator.language, screen.width, screen.height, new Date().getTimezoneOffset()].join("|");
+    const raw = [
+      navigator.userAgent, navigator.language,
+      screen.width, screen.height,
+      new Date().getTimezoneOffset()
+    ].join("|");
     let hash = 0;
-    for (let i = 0; i < raw.length; i++) { hash = (hash << 5) - hash + raw.charCodeAt(i); hash |= 0; }
+    for (let i = 0; i < raw.length; i++) {
+      hash = (hash << 5) - hash + raw.charCodeAt(i);
+      hash |= 0;
+    }
     id = "DV-" + Math.abs(hash).toString(36) + "-" + Math.random().toString(36).slice(2, 8);
     localStorage.setItem("dv_device_id", id);
   }
