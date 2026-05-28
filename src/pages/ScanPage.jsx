@@ -113,7 +113,7 @@ export default function ScanPage() {
               <span style={{color:"#6DBE45"}}>vedha</span>
             </span>
           </div>
-          <div style={S.headerSub}>Attendance · Medical College</div>
+          <div style={S.headerSub}>GVP College of Medicine · Attendance</div>
         </div>
 
         {/* Server status */}
