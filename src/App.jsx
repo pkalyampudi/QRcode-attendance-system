@@ -43,7 +43,10 @@ function MainApp() {
   return (
     <div style={S.shell}>
       <aside style={S.sidebar}>
-        <div style={S.brand}><Logo size="sm" dark /></div>
+        <div style={S.brand}>
+          <Logo size="sm" dark />
+          <div style={S.collegeName}>GVP College of Medicine</div>
+        </div>
 
         <div style={S.deptBadge}>{user.dept || "Physiology"}</div>
 
@@ -135,6 +138,7 @@ const S = {
   shell:           {display:"flex",minHeight:"100vh",background:"#f8fafc"},
   sidebar:         {width:256,background:"var(--dv-dark)",display:"flex",flexDirection:"column",flexShrink:0},
   brand:           {padding:"20px 20px 12px",borderBottom:"1px solid rgba(255,255,255,0.08)"},
+  collegeName:     {fontSize:11,color:"rgba(255,255,255,0.4)",marginTop:6,fontWeight:500,letterSpacing:"0.03em"},
   deptBadge:       {margin:"10px 16px",background:"rgba(109,190,69,0.15)",color:"#6DBE45",padding:"5px 12px",borderRadius:99,fontSize:11,fontWeight:700,textAlign:"center"},
   nav:             {flex:1,padding:"12px",display:"flex",flexDirection:"column",gap:2},
   navSection:      {fontSize:10,fontWeight:700,color:"rgba(255,255,255,0.25)",textTransform:"uppercase",letterSpacing:"0.08em",padding:"8px 8px 4px"},
