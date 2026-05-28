@@ -1,5 +1,5 @@
 // src/pages/SessionPage.jsx
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import QRCode from "qrcode";
 import { api } from "../utils/api.jsx";
 import { useAuth } from "../hooks/useAuth.jsx";
@@ -9,16 +9,16 @@ const ALL_SUBJECTS = [
   { code:"PHYS", name:"Physiology" },
   { code:"BIOC", name:"Biochemistry" },
   { code:"PHAR", name:"Pharmacology" },
-  { code:"PARM", name:"Paramedical" },
+  { code:"PATH", name:"Pathology" },
+  { code:"MICR", name:"Microbiology" },
 ];
 
-const LAB_BATCHES = ["A","B","C"];
-const SESSION_SECS = 900;
+const LAB_BATCHES  = ["A","B","C"];
+const SESSION_SECS = 1800; // 30 minutes
 
 export default function SessionPage() {
   const { user, pin } = useAuth();
 
-  // ── Subject filtering — MUST be after useAuth ──
   const visibleSubjects = (user?.subjectCode && user.subjectCode !== "ALL")
     ? ALL_SUBJECTS.filter(s => s.code === user.subjectCode)
     : ALL_SUBJECTS;
@@ -32,23 +32,52 @@ export default function SessionPage() {
   const [session,     setSession]     = useState(null);
   const [qrUrl,       setQrUrl]       = useState(null);
   const [secsLeft,    setSecsLeft]    = useState(SESSION_SECS);
-  const [liveCount,   setLiveCount]   = useState({ present: 0, total: 0 });
+  const [liveCount,   setLiveCount]   = useState({ present:0, total:0 });
   const [summary,     setSummary]     = useState(null);
   const [loading,     setLoading]     = useState(false);
   const [error,       setError]       = useState("");
-  const timerRef = useRef(null);
-  const pollRef  = useRef(null);
+  const [autoSubmitting, setAutoSubmitting] = useState(false);
+
+  // Refs to avoid stale closures in timer callbacks
+  const timerRef     = useRef(null);
+  const pollRef      = useRef(null);
+  const sessionRef   = useRef(null);
+  const phaseRef     = useRef("setup");
+
+  // Keep refs in sync with state
+  useEffect(() => { phaseRef.current = phase; }, [phase]);
 
   const subjectName = ALL_SUBJECTS.find(s => s.code === subject)?.name || subject;
+
+  // ── Auto-submit when timer hits zero ──
+  const autoSubmit = useCallback(async () => {
+    if (!sessionRef.current || phaseRef.current !== "active") return;
+    setAutoSubmitting(true);
+    setError("⏰ 30 minutes up — auto-submitting attendance…");
+    clearInterval(pollRef.current);
+    try {
+      const d = await api.submitSession(user.id, pin, sessionRef.current.sessionId);
+      setSummary(d.summary);
+      setPhase("done");
+      setAutoSubmitting(false);
+      setError("");
+    } catch(e) {
+      setAutoSubmitting(false);
+      setError("Auto-submit failed — please click Submit manually.");
+    }
+  }, [user.id, pin]);
 
   const startTimer = useCallback((expISO) => {
     clearInterval(timerRef.current);
     timerRef.current = setInterval(() => {
       const left = Math.max(0, Math.round((new Date(expISO) - Date.now()) / 1000));
       setSecsLeft(left);
-      if (left === 0) clearInterval(timerRef.current);
+      if (left === 0) {
+        clearInterval(timerRef.current);
+        autoSubmit();
+      }
     }, 1000);
-  }, []);
+  }, [autoSubmit]);
 
   const startPolling = useCallback(() => {
     clearInterval(pollRef.current);
@@ -66,21 +95,24 @@ export default function SessionPage() {
   const generateQR = async () => {
     setLoading(true); setError("");
     try {
-      const d   = await api.createSession(user.id, pin, {
+      const d = await api.createSession(user.id, pin, {
         subjectCode: subject,
         sessionType,
         labBatch: sessionType === "LAB" ? labBatch : "ALL"
       });
       const ses = d.session;
       setSession(ses);
+      sessionRef.current = ses;
+
       const scanUrl = `${window.location.origin}/scan?token=${ses.token}`;
       const url = await QRCode.toDataURL(scanUrl, {
-        width: 240, margin: 2,
-        color: { dark: "#1a1a2e", light: "#fff" },
-        errorCorrectionLevel: "M"
+        width:240, margin:2,
+        color:{ dark:"#1a1a2e", light:"#fff" },
+        errorCorrectionLevel:"M"
       });
       setQrUrl(url);
-      setSecsLeft(Math.round((new Date(ses.expiresAt) - Date.now()) / 1000));
+      const secs = Math.round((new Date(ses.expiresAt) - Date.now()) / 1000);
+      setSecsLeft(secs);
       startTimer(ses.expiresAt);
       startPolling();
       setPhase("active");
@@ -89,23 +121,26 @@ export default function SessionPage() {
   };
 
   const submit = async () => {
-    if (!session) return;
+    if (!sessionRef.current) return;
     setLoading(true); setError("");
     clearInterval(timerRef.current);
     clearInterval(pollRef.current);
     try {
-      const d = await api.submitSession(user.id, pin, session.sessionId);
+      const d = await api.submitSession(user.id, pin, sessionRef.current.sessionId);
       setSummary(d.summary);
       setPhase("done");
     } catch(e) { setError(e.message); }
     finally { setLoading(false); }
   };
 
-  const m      = Math.floor(secsLeft / 60);
-  const s      = secsLeft % 60;
-  const pct    = Math.round(secsLeft / SESSION_SECS * 100);
-  const tc     = pct > 50 ? "#6DBE45" : pct > 20 ? "#f59e0b" : "#ea4335";
+  const m       = Math.floor(secsLeft / 60);
+  const s       = secsLeft % 60;
+  const pct     = Math.round(secsLeft / SESSION_SECS * 100);
+  const tc      = pct > 50 ? "#6DBE45" : pct > 20 ? "#f59e0b" : "#ea4335";
   const presPct = liveCount.total ? Math.round(liveCount.present / liveCount.total * 100) : 0;
+
+  // Warning when 5 mins left
+  const fiveMinsLeft = secsLeft <= 300 && secsLeft > 0 && phase === "active";
 
   return (
     <div>
@@ -114,7 +149,6 @@ export default function SessionPage() {
           <h2 style={S.title}>Take Attendance</h2>
           <p style={S.sub}>{new Date().toLocaleDateString("en-IN",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</p>
         </div>
-        {/* Show professor's assigned subject as badge */}
         {user?.subjectCode && user.subjectCode !== "ALL" && (
           <div style={S.assignedBadge}>
             📚 {ALL_SUBJECTS.find(s => s.code === user.subjectCode)?.name || user.subjectCode}
@@ -129,7 +163,6 @@ export default function SessionPage() {
             <h3 style={S.setupTitle}>Configure session</h3>
             <div style={S.setupGrid}>
 
-              {/* Subject — only shows professor's own subject(s) */}
               <div style={S.field}>
                 <label style={S.label}>
                   Subject
@@ -139,38 +172,33 @@ export default function SessionPage() {
                 </label>
                 <div style={S.subjectGrid}>
                   {visibleSubjects.map(sub => (
-                    <button key={sub.code}
-                      onClick={() => setSubject(sub.code)}
-                      style={{ ...S.subjectBtn, ...(subject === sub.code ? S.subjectBtnActive : {}) }}>
+                    <button key={sub.code} onClick={() => setSubject(sub.code)}
+                      style={{...S.subjectBtn,...(subject===sub.code?S.subjectBtnActive:{})}}>
                       {sub.name}
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Session type */}
               <div style={S.field}>
                 <label style={S.label}>Session type</label>
                 <div style={S.typeRow}>
                   {["THEORY","LAB"].map(t => (
-                    <button key={t}
-                      onClick={() => setSessionType(t)}
-                      style={{ ...S.typeBtn, ...(sessionType === t ? S.typeBtnActive : {}) }}>
+                    <button key={t} onClick={() => setSessionType(t)}
+                      style={{...S.typeBtn,...(sessionType===t?S.typeBtnActive:{})}}>
                       {t === "THEORY" ? "📖 Theory class" : "🔬 Lab session"}
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Lab batch — only shown for LAB sessions */}
               {sessionType === "LAB" && (
                 <div style={S.field}>
                   <label style={S.label}>Lab batch</label>
                   <div style={S.batchRow}>
                     {LAB_BATCHES.map(b => (
-                      <button key={b}
-                        onClick={() => setLabBatch(b)}
-                        style={{ ...S.batchBtn, ...(labBatch === b ? S.batchBtnActive : {}) }}>
+                      <button key={b} onClick={() => setLabBatch(b)}
+                        style={{...S.batchBtn,...(labBatch===b?S.batchBtnActive:{})}}>
                         Batch {b}
                       </button>
                     ))}
@@ -179,11 +207,11 @@ export default function SessionPage() {
               )}
             </div>
 
-            {/* Summary pills */}
             <div style={S.sessionSummary}>
               <span style={S.summaryPill}>📚 {subjectName}</span>
-              <span style={S.summaryPill}>{sessionType === "THEORY" ? "📖 Theory" : "🔬 Lab"}</span>
-              {sessionType === "LAB" && <span style={S.summaryPill}>Batch {labBatch}</span>}
+              <span style={S.summaryPill}>{sessionType==="THEORY"?"📖 Theory":"🔬 Lab"}</span>
+              {sessionType==="LAB" && <span style={S.summaryPill}>Batch {labBatch}</span>}
+              <span style={S.summaryPill}>⏱ 30 min window</span>
             </div>
 
             {error && <div style={S.error}>⚠️ {error}</div>}
@@ -198,8 +226,8 @@ export default function SessionPage() {
               {[
                 ["1","Select session type"],
                 ["2","Click Generate QR"],
-                ["3","Show QR to students (15 min)"],
-                ["4","Click Submit when done"],
+                ["3","Students scan within 30 mins"],
+                ["4","Auto-submits at 30 min mark"],
               ].map(([n,t]) => (
                 <div key={n} style={S.howStep}>
                   <div style={S.howNum}>{n}</div>
@@ -221,60 +249,79 @@ export default function SessionPage() {
                 {subjectName} · {sessionType}{sessionType==="LAB"?" · Batch "+labBatch:""}
               </span>
             </div>
+
             {qrUrl && (
               <div style={S.qrWrap}>
                 <img src={qrUrl} alt="Attendance QR Code" style={S.qrImg}/>
               </div>
             )}
-            <p style={S.qrHint}>📱 Students scan → enter Roll Number → mark present</p>
 
+            <p style={S.qrHint}>📱 Students scan → enter Roll Number → see name confirmation → present!</p>
+
+            {/* 5 min warning */}
+            {fiveMinsLeft && (
+              <div style={S.warningBanner}>
+                ⚠️ Less than 5 minutes left — auto-submit soon!
+              </div>
+            )}
+
+            {/* Timer */}
             <div style={S.timerRow}>
-              <svg width="72" height="72" viewBox="0 0 72 72">
-                <circle cx="36" cy="36" r="30" fill="none" stroke="#e2e8f0" strokeWidth="5"/>
-                <circle cx="36" cy="36" r="30" fill="none" stroke={tc} strokeWidth="5"
-                  strokeLinecap="round" strokeDasharray="188.5"
-                  strokeDashoffset={188.5*(1-pct/100)}
-                  transform="rotate(-90 36 36)"
-                  style={{transition:"stroke-dashoffset 1s linear, stroke 0.5s"}}/>
-              </svg>
+              <div style={S.timerRing}>
+                <svg width="80" height="80" viewBox="0 0 80 80">
+                  <circle cx="40" cy="40" r="34" fill="none" stroke="#e2e8f0" strokeWidth="6"/>
+                  <circle cx="40" cy="40" r="34" fill="none" stroke={tc} strokeWidth="6"
+                    strokeLinecap="round" strokeDasharray="213.6"
+                    strokeDashoffset={213.6*(1-pct/100)}
+                    transform="rotate(-90 40 40)"
+                    style={{transition:"stroke-dashoffset 1s linear, stroke 0.5s"}}/>
+                </svg>
+                <div style={S.timerInner}>
+                  <div style={{...S.timerNum, color:tc}}>{m}:{s<10?"0":""}{s}</div>
+                </div>
+              </div>
               <div>
-                <div style={{...S.timerNum, color:tc}}>{m}:{s<10?"0":""}{s}</div>
-                <div style={S.timerLabel}>{secsLeft===0 ? "Session expired" : "minutes left"}</div>
+                <div style={S.timerLabel}>
+                  {secsLeft === 0
+                    ? "⏰ Auto-submitting…"
+                    : secsLeft <= 300
+                    ? "⚠️ Almost done!"
+                    : "minutes remaining"}
+                </div>
+                <div style={S.timerSub}>Auto-submits at zero</div>
               </div>
             </div>
 
             <div style={S.qrActions}>
-              <button style={S.submitBtn} onClick={submit} disabled={loading}>
-                {loading ? "Submitting…" : "✅ Submit Attendance"}
+              <button style={S.submitBtn} onClick={submit} disabled={loading || autoSubmitting}>
+                {loading || autoSubmitting ? "Submitting…" : "✅ Submit now"}
               </button>
               <button style={S.printBtn} onClick={()=>window.print()}>🖨️</button>
             </div>
-            {error && <div style={S.error}>{error}</div>}
+            {error && <div style={{...S.error, marginTop:10}}>{error}</div>}
           </div>
 
+          {/* Live feed */}
           <div style={S.liveCard}>
             <p style={S.liveTitle}>📡 Live feed</p>
             <p style={S.liveSub}>Auto-refreshes every 5 seconds</p>
             <div style={S.statsRow}>
-              <StatBox val={liveCount.present}              label="Present" color="#6DBE45" bg="#f0fdf4"/>
+              <StatBox val={liveCount.present}               label="Present" color="#6DBE45" bg="#f0fdf4"/>
               <StatBox val={liveCount.total-liveCount.present} label="Absent"  color="#ea4335" bg="#fef2f2"/>
-              <StatBox val={presPct+"%"}                    label="%"       color="#1a1a2e" bg="#f8fafc"/>
+              <StatBox val={presPct+"%"}                     label="%"       color="#1a1a2e" bg="#f8fafc"/>
             </div>
             <div style={S.progressBar}>
-              <div style={{
-                ...S.progressFill,
-                width: presPct+"%",
-                background: presPct>=70 ? "#6DBE45" : presPct>=50 ? "#f59e0b" : "#ea4335"
-              }}/>
+              <div style={{...S.progressFill, width:presPct+"%",
+                background:presPct>=70?"#6DBE45":presPct>=50?"#f59e0b":"#ea4335"}}/>
             </div>
             <p style={S.progressLabel}>{liveCount.present} of {liveCount.total} scanned</p>
             <div style={S.tipBox}>
               <p style={S.tipTitle}>💡 Remember</p>
               <ul style={S.tipList}>
+                <li>Students see their name after entering Roll No.</li>
                 <li>Each device can only mark one student</li>
-                <li>Students below 70% get flagged automatically</li>
-                <li>Report emails you after submit</li>
-                <li>At-risk alert sent if any student drops below 70%</li>
+                <li>Session auto-submits after 30 minutes</li>
+                <li>At-risk alert sent if student drops below 70%</li>
               </ul>
             </div>
           </div>
@@ -288,7 +335,7 @@ export default function SessionPage() {
           <h3 style={S.doneTitle}>Attendance submitted!</h3>
           <p style={S.doneSub}>
             {subjectName} · {summary.sessionType}
-            {summary.labBatch !== "ALL" ? " · Batch "+summary.labBatch : ""} · {summary.dateStr}
+            {summary.labBatch!=="ALL" ? " · Batch "+summary.labBatch : ""} · {summary.dateStr}
           </p>
           <div style={S.doneStats}>
             <StatBox val={summary.present} label="Present" color="#6DBE45" bg="#f0fdf4"/>
@@ -298,8 +345,10 @@ export default function SessionPage() {
           <div style={S.emailNote}>
             📧 Report emailed · At-risk alert sent if any student below 70%
           </div>
-          <button style={S.newBtn} onClick={()=>{
-            setPhase("setup"); setSummary(null); setSession(null); setQrUrl(null);
+          <button style={S.newBtn} onClick={() => {
+            setPhase("setup"); setSummary(null);
+            setSession(null); sessionRef.current = null;
+            setQrUrl(null); setError("");
           }}>
             Start new session
           </button>
@@ -311,9 +360,9 @@ export default function SessionPage() {
 
 function StatBox({val, label, color, bg}) {
   return (
-    <div style={{background:bg, borderRadius:12, padding:"14px 10px", textAlign:"center", flex:1}}>
-      <div style={{fontSize:28, fontWeight:800, color}}>{val}</div>
-      <div style={{fontSize:12, color:"#64748b", fontWeight:600, marginTop:2}}>{label}</div>
+    <div style={{background:bg,borderRadius:12,padding:"14px 10px",textAlign:"center",flex:1}}>
+      <div style={{fontSize:28,fontWeight:800,color}}>{val}</div>
+      <div style={{fontSize:12,color:"#64748b",fontWeight:600,marginTop:2}}>{label}</div>
     </div>
   );
 }
@@ -354,10 +403,14 @@ const S = {
   qrSubject:       {fontSize:13,color:"#64748b",fontWeight:600},
   qrWrap:          {background:"#f8fafc",borderRadius:14,padding:14,display:"inline-block",marginBottom:10},
   qrImg:           {display:"block",borderRadius:8},
-  qrHint:          {fontSize:12,color:"#475569",background:"#f0f9ff",borderRadius:10,padding:"8px 12px",marginBottom:14},
-  timerRow:        {display:"flex",alignItems:"center",gap:14,justifyContent:"center",marginBottom:16,background:"#f8fafc",borderRadius:14,padding:14},
-  timerNum:        {fontSize:30,fontWeight:800,fontFamily:"monospace"},
-  timerLabel:      {fontSize:12,color:"#94a3b8",marginTop:2},
+  qrHint:          {fontSize:12,color:"#475569",background:"#f0f9ff",borderRadius:10,padding:"8px 12px",marginBottom:10},
+  warningBanner:   {background:"#fffbeb",border:"1px solid #fde68a",borderRadius:10,padding:"10px 14px",fontSize:13,color:"#92400e",fontWeight:600,marginBottom:10},
+  timerRow:        {display:"flex",alignItems:"center",gap:16,justifyContent:"center",marginBottom:16,background:"#f8fafc",borderRadius:14,padding:16},
+  timerRing:       {position:"relative",width:80,height:80,flexShrink:0},
+  timerInner:      {position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column"},
+  timerNum:        {fontSize:18,fontWeight:800,fontFamily:"monospace",lineHeight:1},
+  timerLabel:      {fontSize:13,color:"#475569",fontWeight:600},
+  timerSub:        {fontSize:11,color:"#94a3b8",marginTop:3},
   qrActions:       {display:"flex",gap:8},
   submitBtn:       {flex:1,padding:12,background:"#6DBE45",color:"#fff",border:"none",borderRadius:12,fontSize:14,fontWeight:700,cursor:"pointer"},
   printBtn:        {padding:"12px 14px",background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:12,fontSize:16,cursor:"pointer"},
@@ -377,5 +430,5 @@ const S = {
   doneStats:       {display:"flex",gap:12,marginBottom:20},
   emailNote:       {background:"#f0fdf4",borderRadius:12,padding:"12px 16px",fontSize:13,color:"#166534",fontWeight:600,marginBottom:20},
   newBtn:          {padding:"13px 32px",background:"#1a1a2e",color:"#fff",border:"none",borderRadius:14,fontSize:15,fontWeight:700,cursor:"pointer"},
-  error:           {background:"#fef2f2",borderRadius:10,padding:"10px 14px",fontSize:13,color:"#dc2626",marginTop:10},
+  error:           {background:"#fef2f2",borderRadius:10,padding:"10px 14px",fontSize:13,color:"#dc2626"},
 };
