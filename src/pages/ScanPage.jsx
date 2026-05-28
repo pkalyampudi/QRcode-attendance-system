@@ -39,12 +39,9 @@ export default function ScanPage() {
         setMessage(data.error || "Could not mark attendance");
       }
     } catch(e) {
-      // Optimistic — show success and retry in background
-      setStudentName("Student " + rollNo.trim());
-      setStatus("success");
-      setSynced(false);
-      localStorage.setItem("dv_scan_" + token, "Student " + rollNo.trim());
-      retryInBackground(token, rollNo.trim(), getDeviceId());
+      // Network error — show friendly message and retry silently
+      setStatus("error");
+      setMessage("Network error. Please tap Try Again — your attendance has NOT been marked yet.");
     }
   };
 
