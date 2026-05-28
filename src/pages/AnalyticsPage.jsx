@@ -10,10 +10,19 @@ const SUBJECTS = [
 
 export default function AnalyticsPage() {
   const { user, pin } = useAuth();
+
+  // Filter subjects to only show professor's assigned subject
+  const visibleSubjects = (user?.subjectCode && user.subjectCode !== "ALL")
+    ? SUBJECTS.filter(s => s.code === user.subjectCode)
+    : SUBJECTS;
+
   const [data,    setData]    = useState(null);
   const [loading, setLoading] = useState(true);
   const [view,    setView]    = useState("day");
-  const [subject, setSubject] = useState("ALL");
+  // Default to professor's own subject, not ALL
+  const [subject, setSubject] = useState(
+    user?.subjectCode && user.subjectCode !== "ALL" ? user.subjectCode : "ALL"
+  );
   const [type,    setType]    = useState("THEORY");
 
   useEffect(() => {
@@ -52,8 +61,15 @@ export default function AnalyticsPage() {
         <div style={S.filterGroup}>
           <span style={S.filterLabel}>Subject</span>
           <div style={S.pills}>
-            <button onClick={()=>setSubject("ALL")} style={{...S.pill,...(subject==="ALL"?S.pillActive:{})}}>All</button>
-            {SUBJECTS.map(s => <button key={s.code} onClick={()=>setSubject(s.code)} style={{...S.pill,...(subject===s.code?S.pillActive:{})}}>{s.name}</button>)}
+            {visibleSubjects.length > 1 && (
+              <button onClick={()=>setSubject("ALL")} style={{...S.pill,...(subject==="ALL"?S.pillActive:{})}}>All</button>
+            )}
+            {visibleSubjects.map(s => (
+              <button key={s.code} onClick={()=>setSubject(s.code)}
+                style={{...S.pill,...(subject===s.code?S.pillActive:{})}}>
+                {s.name}
+              </button>
+            ))}
           </div>
         </div>
         <div style={S.filterGroup}>
