@@ -11,7 +11,7 @@ const SUBJECTS = [
 export default function AnalyticsPage() {
   const { user, pin } = useAuth();
 
-  // Filter subjects to only show professor's assigned sub
+  // Filter subjects to only show professor's assigned subject
   const visibleSubjects = (user?.subjectCode && user.subjectCode !== "ALL")
     ? SUBJECTS.filter(s => s.code === user.subjectCode)
     : SUBJECTS;
@@ -113,7 +113,7 @@ function StudentTable({ dates, subAtt, students, view }) {
 
   return (
     <div style={S.card}>
-      <div style={{overflowX:"auto"}}>
+      <div style={{overflowX:"auto",overflowY:"auto",flex:1}}>
         <table style={S.table}>
           <thead>
             <tr style={S.thead}>
@@ -193,7 +193,7 @@ const S = {
   atRiskBanner: {background:"#fef3c7",border:"1px solid #fde68a",borderRadius:12,padding:"12px 16px",fontSize:13,color:"#92400e",marginBottom:16,lineHeight:1.5},
   empty:        {background:"#fff",borderRadius:20,padding:"3rem",textAlign:"center",boxShadow:"0 2px 12px rgba(0,0,0,0.06)"},
   grid:         {},
-  card:         {background:"#fff",borderRadius:20,overflow:"hidden",boxShadow:"0 2px 12px rgba(0,0,0,0.06)"},
+  card:         {background:"#fff",borderRadius:20,overflow:"hidden",boxShadow:"0 2px 12px rgba(0,0,0,0.06)",maxHeight:"70vh",display:"flex",flexDirection:"column"},
   table:        {width:"100%",borderCollapse:"collapse",fontSize:13},
   thead:        {background:"#f8fafc"},
   th:           {padding:"11px 14px",textAlign:"left",fontWeight:700,fontSize:11,textTransform:"uppercase",letterSpacing:"0.05em",color:"#94a3b8",borderBottom:"1px solid #f1f5f9"},
