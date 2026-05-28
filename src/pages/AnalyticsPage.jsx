@@ -19,7 +19,11 @@ export default function AnalyticsPage() {
   const [data,    setData]    = useState(null);
   const [loading, setLoading] = useState(true);
   const [view,    setView]    = useState("day");
+  const [page,    setPage]    = useState(1);
+  const PAGE_SIZE = 20;
   // Default to professor's own subject, not ALL
+  // Reset to page 1 when filters change
+  const resetPage = () => setPage(1);
   const [subject, setSubject] = useState(
     user?.subjectCode && user.subjectCode !== "ALL" ? user.subjectCode : "ALL"
   );
@@ -62,10 +66,10 @@ export default function AnalyticsPage() {
           <span style={S.filterLabel}>Subject</span>
           <div style={S.pills}>
             {visibleSubjects.length > 1 && (
-              <button onClick={()=>setSubject("ALL")} style={{...S.pill,...(subject==="ALL"?S.pillActive:{})}}>All</button>
+              <button onClick={()=>{setSubject("ALL");resetPage();}} style={{...S.pill,...(subject==="ALL"?S.pillActive:{})}}>All</button>
             )}
             {visibleSubjects.map(s => (
-              <button key={s.code} onClick={()=>setSubject(s.code)}
+              <button key={s.code} onClick={()=>{setSubject(s.code);resetPage();}}
                 style={{...S.pill,...(subject===s.code?S.pillActive:{})}}>
                 {s.name}
               </button>
@@ -100,16 +104,18 @@ export default function AnalyticsPage() {
         </div>
       ) : (
         <div style={S.grid}>
-          <StudentTable dates={dates} subAtt={subAtt} students={students} view={view} />
+          <StudentTable dates={dates} subAtt={subAtt} students={students} view={view} page={page} setPage={setPage} pageSize={PAGE_SIZE} />
         </div>
       )}
     </div>
   );
 }
 
-function StudentTable({ dates, subAtt, students, view }) {
-  const groups = groupDates(dates, view);
-  const keys   = Object.keys(groups).reverse().slice(0,6);
+function StudentTable({ dates, subAtt, students, view, page, setPage, pageSize }) {
+  const groups       = groupDates(dates, view);
+  const keys         = Object.keys(groups).reverse().slice(0,6);
+  const totalPages   = Math.ceil(students.length / pageSize);
+  const pageStudents = students.slice((page-1)*pageSize, page*pageSize);
 
   return (
     <div style={S.card}>
@@ -124,14 +130,15 @@ function StudentTable({ dates, subAtt, students, view }) {
             </tr>
           </thead>
           <tbody>
-            {students.map((s,i) => {
+            {pageStudents.map((s, i) => {
+              const gi      = (page-1)*pageSize + i;
               const overall = dates.length ? Math.round(dates.filter(d=>subAtt[d]?.[s.id]).length/dates.length*100) : 0;
               return (
                 <tr key={s.id} style={S.tr}>
                   <td style={S.td}><code style={S.code}>{s.id}</code></td>
                   <td style={S.td}>
                     <div style={{display:"flex",alignItems:"center",gap:8}}>
-                      <div style={{...S.avatar,background:COLORS[i%COLORS.length]+"22",color:COLORS[i%COLORS.length]}}>{s.name[0]}</div>
+                      <div style={{...S.avatar,background:COLORS[gi%COLORS.length]+"22",color:COLORS[gi%COLORS.length]}}>{s.name[0]}</div>
                       <span style={{fontWeight:600}}>{s.name}</span>
                     </div>
                   </td>
@@ -148,9 +155,26 @@ function StudentTable({ dates, subAtt, students, view }) {
           </tbody>
         </table>
       </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div style={S.pagination}>
+          <span style={S.pageInfo}>
+            Showing {((page-1)*pageSize)+1}–{Math.min(page*pageSize,students.length)} of {students.length} students
+          </span>
+          <div style={S.pageButtons}>
+            <button style={{...S.pageBtn,opacity:page===1?0.4:1}} onClick={()=>setPage(p=>Math.max(1,p-1))} disabled={page===1}>← Prev</button>
+            {Array.from({length:totalPages},(_,i)=>i+1).map(p=>(
+              <button key={p} style={{...S.pageBtn,...(p===page?S.pageBtnActive:{})}} onClick={()=>setPage(p)}>{p}</button>
+            ))}
+            <button style={{...S.pageBtn,opacity:page===totalPages?0.4:1}} onClick={()=>setPage(p=>Math.min(totalPages,p+1))} disabled={page===totalPages}>Next →</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
 
 function groupDates(dates, view) {
   const g = {};
@@ -193,7 +217,12 @@ const S = {
   atRiskBanner: {background:"#fef3c7",border:"1px solid #fde68a",borderRadius:12,padding:"12px 16px",fontSize:13,color:"#92400e",marginBottom:16,lineHeight:1.5},
   empty:        {background:"#fff",borderRadius:20,padding:"3rem",textAlign:"center",boxShadow:"0 2px 12px rgba(0,0,0,0.06)"},
   grid:         {},
-  card:         {background:"#fff",borderRadius:20,overflow:"hidden",boxShadow:"0 2px 12px rgba(0,0,0,0.06)",maxHeight:"70vh",display:"flex",flexDirection:"column"},
+  card:         {background:"#fff",borderRadius:20,overflow:"hidden",boxShadow:"0 2px 12px rgba(0,0,0,0.06)",display:"flex",flexDirection:"column"},
+  pagination:   {display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",borderTop:"1px solid #f1f5f9",flexWrap:"wrap",gap:8},
+  pageInfo:     {fontSize:13,color:"#64748b"},
+  pageButtons:  {display:"flex",gap:4,flexWrap:"wrap"},
+  pageBtn:      {padding:"5px 12px",border:"1.5px solid #e2e8f0",borderRadius:8,background:"#fff",cursor:"pointer",fontSize:13,fontWeight:500,color:"#475569"},
+  pageBtnActive:{background:"#1a1a2e",color:"#fff",border:"1.5px solid #1a1a2e",fontWeight:700},
   table:        {width:"100%",borderCollapse:"collapse",fontSize:13},
   thead:        {background:"#f8fafc"},
   th:           {padding:"11px 14px",textAlign:"left",fontWeight:700,fontSize:11,textTransform:"uppercase",letterSpacing:"0.05em",color:"#94a3b8",borderBottom:"1px solid #f1f5f9"},
