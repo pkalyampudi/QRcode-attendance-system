@@ -39,10 +39,11 @@ export default function SessionPage() {
   const [autoSubmitting, setAutoSubmitting] = useState(false);
 
   // Refs to avoid stale closures in timer callbacks
-  const timerRef     = useRef(null);
-  const pollRef      = useRef(null);
-  const sessionRef   = useRef(null);
-  const phaseRef     = useRef("setup");
+  const timerRef        = useRef(null);
+  const pollRef         = useRef(null);
+  const sessionRef      = useRef(null);
+  const phaseRef        = useRef("setup");
+  const totalSecsRef    = useRef(SESSION_SECS); // actual total from server
 
   // Keep refs in sync with state
   useEffect(() => { phaseRef.current = phase; }, [phase]);
@@ -67,8 +68,9 @@ export default function SessionPage() {
     }
   }, [user.id, pin]);
 
-  const startTimer = useCallback((expISO) => {
+  const startTimer = useCallback((expISO, totalSecs) => {
     clearInterval(timerRef.current);
+    totalSecsRef.current = totalSecs; // store actual total for pct calculation
     timerRef.current = setInterval(() => {
       const left = Math.max(0, Math.round((new Date(expISO) - Date.now()) / 1000));
       setSecsLeft(left);
@@ -117,7 +119,7 @@ export default function SessionPage() {
       setQrUrl(url);
       const secs = Math.round((new Date(ses.expiresAt) - Date.now()) / 1000);
       setSecsLeft(secs);
-      startTimer(ses.expiresAt);
+      startTimer(ses.expiresAt, secs);
       startPolling();
       setPhase("active");
     } catch(e) { setError(e.message); }
@@ -139,7 +141,7 @@ export default function SessionPage() {
 
   const m       = Math.floor(secsLeft / 60);
   const s       = secsLeft % 60;
-  const pct     = Math.round(secsLeft / SESSION_SECS * 100);
+  const pct     = totalSecsRef.current > 0 ? Math.round(secsLeft / totalSecsRef.current * 100) : 100;
   const tc      = pct > 50 ? "#6DBE45" : pct > 20 ? "#f59e0b" : "#ea4335";
   const presPct = liveCount.total ? Math.round(liveCount.present / liveCount.total * 100) : 0;
 
