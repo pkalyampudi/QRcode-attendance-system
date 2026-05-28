@@ -11,7 +11,7 @@ const SUBJECTS = [
 export default function AnalyticsPage() {
   const { user, pin } = useAuth();
 
-  // Filter subjects to only show professor's assigned subject
+  // Filter subjects to only show professor's assigned sub
   const visibleSubjects = (user?.subjectCode && user.subjectCode !== "ALL")
     ? SUBJECTS.filter(s => s.code === user.subjectCode)
     : SUBJECTS;
