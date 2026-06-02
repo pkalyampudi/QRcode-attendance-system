@@ -1,4 +1,4 @@
-// src/pages/ScanPage.jsx
+// src/pages/ScanPage.jsx -- added comment
 import { useState, useEffect } from "react";
 import { api, getDeviceId } from "../utils/api.jsx";
 
