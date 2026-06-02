@@ -56,17 +56,21 @@ export default function AnalyticsPage() {
 
   function normDate(d) {
     if (!d) return d;
-    const s = String(d);
-    // Already yyyy-MM-dd
-    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-    // Try to parse and reformat
+    const s = String(d).trim();
+    // Already "yyyy-MM-dd" or "yyyy-MM-dd HH:mm" — keep as-is
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s;
+    // Full ISO or browser Date string — parse and reformat preserving time
     try {
-      const dt = new Date(s);
+      const dt  = new Date(s);
       if (isNaN(dt.getTime())) return s;
-      const y  = dt.getFullYear();
-      const m  = String(dt.getMonth()+1).padStart(2,"0");
-      const dd = String(dt.getDate()).padStart(2,"0");
-      return y + "-" + m + "-" + dd;
+      const y   = dt.getFullYear();
+      const mo  = String(dt.getMonth()+1).padStart(2,"0");
+      const day = String(dt.getDate()).padStart(2,"0");
+      const hh  = String(dt.getHours()).padStart(2,"0");
+      const mm  = String(dt.getMinutes()).padStart(2,"0");
+      // If time is midnight treat as date-only
+      if (hh === "00" && mm === "00") return y + "-" + mo + "-" + day;
+      return y + "-" + mo + "-" + day + " " + hh + ":" + mm;
     } catch(_) { return s; }
   }
 
@@ -245,17 +249,23 @@ function StudentTable({ dates, subAtt, students, view, page, setPage, pageSize }
 // Format date as "Thu May 28" for column headers
 function formatDateShort(dateStr) {
   if (!dateStr) return "";
-  const s = String(dateStr);
-  // Normalize to yyyy-MM-dd first
-  let clean = s.slice(0, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(clean)) return s;
+  const s = String(dateStr).trim();
+  // Handles both "yyyy-MM-dd" and "yyyy-MM-dd HH:mm"
+  const datePart = s.slice(0, 10);
+  const timePart = s.length > 10 ? s.slice(11, 16) : null; // "HH:mm"
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(datePart)) return s;
   try {
-    const [y, mo, d] = clean.split("-").map(Number);
-    const dt  = new Date(y, mo - 1, d);
+    const [y, mo, d] = datePart.split("-").map(Number);
     const day = String(d).padStart(2, "0");
     const mon = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][mo-1];
     const yr  = String(y).slice(2);
-    return day + "-" + mon + "-" + yr;
+    const dateLabel = day + "-" + mon + "-" + yr;
+    if (!timePart) return dateLabel;
+    // Convert HH:mm to 12-hour AM/PM
+    const [hh, mm] = timePart.split(":").map(Number);
+    const ampm = hh >= 12 ? "PM" : "AM";
+    const h12  = hh % 12 === 0 ? 12 : hh % 12;
+    return dateLabel + " " + String(h12).padStart(2,"0") + ":" + String(mm).padStart(2,"0") + " " + ampm;
   } catch(_) { return s; }
 }
 
@@ -280,7 +290,7 @@ function groupDates(dates, view) {
   const g = {};
   dates.forEach(d => {
     let key;
-    if (view==="day") { key=d; }
+    if (view==="day") { key=d; } // Keep full "yyyy-MM-dd HH:mm" to separate sessions
     else if (view==="week") {
       const dt=new Date(d); const mon=new Date(dt); const day=dt.getDay();
       mon.setDate(dt.getDate()-(day===0?6:day-1));
