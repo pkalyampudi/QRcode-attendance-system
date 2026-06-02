@@ -145,12 +145,7 @@ function StudentTable({ dates, subAtt, students, view, page, setPage, pageSize }
               return (
                 <tr key={s.id} style={S.tr}>
                   <td style={S.td}><code style={S.code}>{s.id}</code></td>
-                  <td style={S.td}>
-                    <div style={{display:"flex",alignItems:"center",gap:8}}>
-                      <div style={{...S.avatar,background:COLORS[gi%COLORS.length]+"22",color:COLORS[gi%COLORS.length]}}>{s.name[0]}</div>
-                      <span style={{fontWeight:600}}>{s.name}</span>
-                    </div>
-                  </td>
+                  <td style={{...S.td, fontWeight:600}}>{s.name}</td>
                   {/* P/A per period */}
                   {keys.map(k => {
                     const ds = groups[k];
@@ -217,9 +212,12 @@ function StudentTable({ dates, subAtt, students, view, page, setPage, pageSize }
 
 // Format date as "Thu May 28" for column headers
 function formatDateShort(dateStr) {
+  // Only format if it looks like yyyy-MM-dd
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
   try {
-    const d = new Date(dateStr + "T00:00:00+05:30");
-    return d.toLocaleDateString("en-IN", { weekday:"short", day:"2-digit", month:"short" });
+    const [y, m, d] = dateStr.split("-").map(Number);
+    const dt = new Date(y, m - 1, d); // local date — no timezone shift
+    return dt.toLocaleDateString("en-IN", { weekday:"short", day:"2-digit", month:"short" });
   } catch(_) { return dateStr; }
 }
 
