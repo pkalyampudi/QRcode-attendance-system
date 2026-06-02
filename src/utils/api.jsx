@@ -90,6 +90,23 @@ export const api = {
   getStudentReport: (userId, pin, sid)  => call("getStudentReport", { userId, pin, studentId: sid }, 2),
 };
 
+// Format timestamp in IST — "Thu May 28 2026 14:30"
+export function formatIST(dateStr) {
+  try {
+    const d = dateStr ? new Date(dateStr) : new Date();
+    return d.toLocaleString("en-IN", {
+      timeZone: "Asia/Kolkata",
+      weekday:  "short",
+      year:     "numeric",
+      month:    "short",
+      day:      "2-digit",
+      hour:     "2-digit",
+      minute:   "2-digit",
+      hour12:   false
+    }).replace(/,/g, "").replace(/\s+/g, " ").trim();
+  } catch(_) { return String(dateStr); }
+}
+
 export function getDeviceId() {
   let id = localStorage.getItem("dv_device_id");
   if (!id) {
