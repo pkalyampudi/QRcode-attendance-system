@@ -113,9 +113,10 @@ export default function AnalyticsPage() {
 
 function StudentTable({ dates, subAtt, students, view, page, setPage, pageSize }) {
   const groups       = groupDates(dates, view);
-  const keys         = Object.keys(groups).reverse().slice(0,6);
+  const keys         = Object.keys(groups).reverse().slice(0, 6);
   const totalPages   = Math.ceil(students.length / pageSize);
   const pageStudents = students.slice((page-1)*pageSize, page*pageSize);
+  const isDay        = view === "day";
 
   return (
     <div style={S.card}>
@@ -125,14 +126,22 @@ function StudentTable({ dates, subAtt, students, view, page, setPage, pageSize }
             <tr style={S.thead}>
               <th style={{...S.th,width:60}}>Roll No.</th>
               <th style={S.th}>Name</th>
-              <th style={{...S.th,width:80}}>Overall</th>
-              {keys.map(k => <th key={k} style={{...S.th,width:90}}>{k}</th>)}
+              {/* Per-period columns first */}
+              {keys.map(k => (
+                <th key={k} style={{...S.th, width: isDay ? 80 : 90}}>
+                  {isDay ? formatDateShort(k) : k}
+                </th>
+              ))}
+              {/* Overall % last */}
+              <th style={{...S.th, width:80, background:"#1a1a2e", color:"#fff"}}>Overall %</th>
             </tr>
           </thead>
           <tbody>
             {pageStudents.map((s, i) => {
               const gi      = (page-1)*pageSize + i;
-              const overall = dates.length ? Math.round(dates.filter(d=>subAtt[d]?.[s.id]).length/dates.length*100) : 0;
+              const overall = dates.length
+                ? Math.round(dates.filter(d => subAtt[d]?.[s.id]).length / dates.length * 100)
+                : 0;
               return (
                 <tr key={s.id} style={S.tr}>
                   <td style={S.td}><code style={S.code}>{s.id}</code></td>
@@ -142,13 +151,43 @@ function StudentTable({ dates, subAtt, students, view, page, setPage, pageSize }
                       <span style={{fontWeight:600}}>{s.name}</span>
                     </div>
                   </td>
-                  <td style={S.td}><Badge pct={overall}/></td>
+                  {/* P/A per period */}
                   {keys.map(k => {
-                    const ds  = groups[k];
-                    const prs = ds.filter(d=>subAtt[d]?.[s.id]).length;
-                    const pct = ds.length ? Math.round(prs/ds.length*100) : null;
-                    return <td key={k} style={S.td}>{pct!==null?<Badge pct={pct} small/>:<span style={{color:"#e2e8f0"}}>–</span>}</td>;
+                    const ds = groups[k];
+                    if (isDay) {
+                      // Single day — show P or A
+                      const present = subAtt[k]?.[s.id];
+                      return (
+                        <td key={k} style={{...S.td, textAlign:"center"}}>
+                          {present === undefined
+                            ? <span style={{color:"#e2e8f0",fontSize:12}}>—</span>
+                            : <span style={{
+                                fontWeight:700, fontSize:13,
+                                color: present ? "#166534" : "#c62828"
+                              }}>{present ? "P" : "A"}</span>
+                          }
+                        </td>
+                      );
+                    } else {
+                      // Week/month/semester — show P count / total
+                      const prs = ds.filter(d => subAtt[d]?.[s.id]).length;
+                      const tot = ds.length;
+                      return (
+                        <td key={k} style={{...S.td, textAlign:"center"}}>
+                          <span style={{
+                            fontSize:12, fontWeight:600,
+                            color: prs === tot ? "#166534" : prs > 0 ? "#92400e" : "#c62828"
+                          }}>
+                            {prs}/{tot}
+                          </span>
+                        </td>
+                      );
+                    }
                   })}
+                  {/* Overall % — last column */}
+                  <td style={{...S.td, background:"#f8fafc", textAlign:"center"}}>
+                    <Badge pct={overall}/>
+                  </td>
                 </tr>
               );
             })}
@@ -175,6 +214,31 @@ function StudentTable({ dates, subAtt, students, view, page, setPage, pageSize }
   );
 }
 
+
+// Format date as "Thu May 28" for column headers
+function formatDateShort(dateStr) {
+  try {
+    const d = new Date(dateStr + "T00:00:00+05:30");
+    return d.toLocaleDateString("en-IN", { weekday:"short", day:"2-digit", month:"short" });
+  } catch(_) { return dateStr; }
+}
+
+// Format full IST timestamp
+function formatIST(dateStr) {
+  try {
+    const d = new Date(dateStr);
+    return d.toLocaleString("en-IN", {
+      timeZone:    "Asia/Kolkata",
+      weekday:     "short",
+      year:        "numeric",
+      month:       "short",
+      day:         "2-digit",
+      hour:        "2-digit",
+      minute:      "2-digit",
+      hour12:      false
+    }).replace(/,/g, "");
+  } catch(_) { return dateStr; }
+}
 
 function groupDates(dates, view) {
   const g = {};
