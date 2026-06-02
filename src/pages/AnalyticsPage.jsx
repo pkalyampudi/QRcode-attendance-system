@@ -40,9 +40,41 @@ export default function AnalyticsPage() {
 
   const { attendance, students } = data;
 
+  // Normalize all date keys to yyyy-MM-dd
+  function normalizeAttendance(att) {
+    const out = {};
+    Object.entries(att).forEach(([subKey, dateMap]) => {
+      out[subKey] = {};
+      Object.entries(dateMap).forEach(([dateKey, stuMap]) => {
+        // Extract yyyy-MM-dd from any date format
+        const norm = normDate(dateKey);
+        out[subKey][norm] = stuMap;
+      });
+    });
+    return out;
+  }
+
+  function normDate(d) {
+    if (!d) return d;
+    const s = String(d);
+    // Already yyyy-MM-dd
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    // Try to parse and reformat
+    try {
+      const dt = new Date(s);
+      if (isNaN(dt.getTime())) return s;
+      const y  = dt.getFullYear();
+      const m  = String(dt.getMonth()+1).padStart(2,"0");
+      const dd = String(dt.getDate()).padStart(2,"0");
+      return y + "-" + m + "-" + dd;
+    } catch(_) { return s; }
+  }
+
+  const normalizedAtt = normalizeAttendance(attendance);
+
   // Get all dates for selected subject+type
-  const key    = (subject === "ALL" ? Object.keys(attendance)[0] : subject+"|"+type) || "";
-  const subAtt = attendance[key] || {};
+  const key    = (subject === "ALL" ? Object.keys(normalizedAtt)[0] : subject+"|"+type) || "";
+  const subAtt = normalizedAtt[key] || {};
   const dates  = Object.keys(subAtt).sort();
 
   // Overall pct per student across selected view
@@ -212,13 +244,19 @@ function StudentTable({ dates, subAtt, students, view, page, setPage, pageSize }
 
 // Format date as "Thu May 28" for column headers
 function formatDateShort(dateStr) {
-  // Only format if it looks like yyyy-MM-dd
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
+  if (!dateStr) return "";
+  const s = String(dateStr);
+  // Normalize to yyyy-MM-dd first
+  let clean = s.slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(clean)) return s;
   try {
-    const [y, m, d] = dateStr.split("-").map(Number);
-    const dt = new Date(y, m - 1, d); // local date — no timezone shift
-    return dt.toLocaleDateString("en-IN", { weekday:"short", day:"2-digit", month:"short" });
-  } catch(_) { return dateStr; }
+    const [y, mo, d] = clean.split("-").map(Number);
+    const dt  = new Date(y, mo - 1, d);
+    const day = String(d).padStart(2, "0");
+    const mon = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][mo-1];
+    const yr  = String(y).slice(2);
+    return day + "-" + mon + "-" + yr;
+  } catch(_) { return s; }
 }
 
 // Format full IST timestamp
